@@ -30,5 +30,27 @@ function mergeFinance(remote,local){
  if(old.preferences){data.preferences={...(data.preferences||{}),...old.preferences};}
  return {data,changed:changes>0,added,changes};
 }
-const api={money,plan,home,csvParse,validateRows,fingerprint,trends,mergeFinance};if(typeof module!=='undefined')module.exports=api;else root.Core=api;
+function mergeBackup(current,backup){
+ const data=JSON.parse(JSON.stringify(current));let added=0,filled=0,possibleDuplicates=0;
+ const ids=new Set(data.transactions.map(t=>t.id)),seen=new Set(data.transactions.map(fingerprint));
+ for(const t of backup.transactions){
+  if(ids.has(t.id))continue;
+  const key=fingerprint(t);
+  if(seen.has(key)){possibleDuplicates++;continue;}
+  data.transactions.push(t);ids.add(t.id);seen.add(key);added++;
+ }
+ for(const section of ['plans','homes'])for(const [month,fields] of Object.entries(backup[section]||{})){
+  if(!/^\d{4}-\d{2}$/.test(month)||!fields||typeof fields!=='object'||Array.isArray(fields))continue;
+  data[section][month]??={};
+  for(const [key,value] of Object.entries(fields))if((data[section][month][key]===''||data[section][month][key]===null||data[section][month][key]===undefined)&&value!==''&&value!==null&&value!==undefined){data[section][month][key]=value;filled++;}
+ }
+ data.accounts.forEach((a,i)=>{const prior=backup.accounts?.[i];if(!prior||prior.name!==a.name)return;
+  if((a.balance===''||a.balance===null||a.balance===undefined)&&prior.balance!==''&&money(prior.balance)){a.balance=prior.balance;a.date=prior.date||a.date;filled++;}
+ });
+ for(const [key,value] of Object.entries(backup.debts||{}))if(data.debts?.[key]===undefined){data.debts??={};data.debts[key]=value;filled++;}
+ if(!data.priority&&backup.priority){data.priority=backup.priority;filled++;}
+ if(!data.importReview&&backup.importReview){data.importReview=backup.importReview;filled++;}
+ return {data,added,filled,possibleDuplicates,changed:added+filled>0};
+}
+const api={money,plan,home,csvParse,validateRows,fingerprint,trends,mergeFinance,mergeBackup};if(typeof module!=='undefined')module.exports=api;else root.Core=api;
 })(typeof window!=='undefined'?window:globalThis);
