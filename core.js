@@ -2,6 +2,18 @@
 const money=x=>x!==''&&x!==null&&x!==undefined&&Number.isFinite(Number(x))&&Number(x)>=0;
 function plan(p){const keys=['cash','bills','living','home','tax','emergency','goals','floor'];if(!p.confirmed||!keys.every(k=>money(p[k])))return null;const protectedMoney=keys.slice(1).reduce((s,k)=>s+Number(p[k]),0),delta=Number(p.cash)-protectedMoney;const complete=['saving','invest','debt'].every(k=>money(p[k]));return {available:Math.max(0,delta),shortfall:Math.max(0,-delta),remaining:complete?Math.max(0,delta)-['saving','invest','debt'].reduce((s,k)=>s+Number(p[k]),0):null};}
 function home(h){const k=['pedro','orlanis','water','power','internet','food','housing','other','margin','saving','buffer'];if(!k.every(x=>money(h[x]))||Number(h.pedro)+Number(h.orlanis)<=0)return null;const ratio=Number(h.pedro)/(Number(h.pedro)+Number(h.orlanis)),total=k.slice(2).reduce((s,x)=>s+Number(h[x]),0),p=Math.round(total*ratio*100)/100;return {ratio,total,pedro:p,orlanis:Math.round((total-p)*100)/100};}
+function cashPosition(accounts,debts={}){
+ const valid=a=>a&&a.balance!==''&&money(a.balance);
+ const checking=[0,1].map(i=>accounts[i]);if(!checking.every(valid))return null;
+ const cards=[7,8,9].map(i=>({name:accounts[i]?.name||'',balance:valid(accounts[i])?Number(accounts[i].balance):null,date:accounts[i]?.date||''}));
+ const obligations=[['Hipoteca',debts.mortgage?.payment],['HOA',debts.hoa?.payment],['Auto',debts.auto?.payment]].map(([name,amount])=>({name,amount:money(amount)?Number(amount):null}));
+ const round=n=>Math.round((n+Number.EPSILON)*100)/100;
+ const cash=round(checking.reduce((n,a)=>n+Number(a.balance),0));
+ const cardsTotal=round(cards.reduce((n,a)=>n+(a.balance??0),0));
+ const fixedTotal=round(obligations.reduce((n,a)=>n+(a.amount??0),0));
+ const complete=cards.every(a=>a.balance!==null)&&obligations.every(a=>a.amount!==null);
+ return {cash,cards,cardsTotal,obligations,fixedTotal,afterCards:cards.every(a=>a.balance!==null)?round(cash-cardsTotal):null,afterKnown:complete?round(cash-cardsTotal-fixedTotal):null,complete};
+}
 function csvParse(text){const rows=[];let row=[],cell='',q=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(q&&text[i+1]==='"'){cell+='"';i++;}else q=!q;}else if(c===','&&!q){row.push(cell);cell='';}else if((c==='\n'||c==='\r')&&!q){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);if(row.some(x=>x.trim()))rows.push(row);row=[];cell='';}else cell+=c;}if(q)throw Error('Comillas sin cerrar en el CSV.');row.push(cell);if(row.some(x=>x.trim()))rows.push(row);return rows;}
 function validateRows(rows){if(!rows.length)throw Error('CSV vacío.');const headers=rows[0].map(v=>v.replace(/^\uFEFF/,'').trim().toLowerCase());const keys=['fecha','cuenta','descripcion','tipo','categoria','monto','ambito'];if(keys.some(k=>!headers.includes(k)))throw Error('Faltan columnas. Descarga la plantilla para ver el formato.');return rows.slice(1).map((r,i)=>{const t=Object.fromEntries(keys.map(k=>[k,(r[headers.indexOf(k)]||'').trim()]));if(!/^\d{4}-\d{2}-\d{2}$/.test(t.fecha)||Number.isNaN(Date.parse(t.fecha))||new Date(t.fecha).toISOString().slice(0,10)!==t.fecha)throw Error('Fecha inválida en fila '+(i+2));if(!money(t.monto)||!['Ingreso','Gasto','Transferencia','Reembolso'].includes(t.tipo)||!['Personal','Hogar'].includes(t.ambito)||!t.cuenta||!t.descripcion)throw Error('Monto, tipo, ámbito o descripción inválidos en fila '+(i+2));t.monto=Number(t.monto);return t;});}
 function fingerprint(t){return [t.fecha,t.cuenta,t.descripcion,t.tipo,t.categoria,Number(t.monto),t.ambito].join('|');}
@@ -52,5 +64,5 @@ function mergeBackup(current,backup){
  if(!data.importReview&&backup.importReview){data.importReview=backup.importReview;filled++;}
  return {data,added,filled,possibleDuplicates,changed:added+filled>0};
 }
-const api={money,plan,home,csvParse,validateRows,fingerprint,trends,mergeFinance,mergeBackup};if(typeof module!=='undefined')module.exports=api;else root.Core=api;
+const api={money,plan,home,cashPosition,csvParse,validateRows,fingerprint,trends,mergeFinance,mergeBackup};if(typeof module!=='undefined')module.exports=api;else root.Core=api;
 })(typeof window!=='undefined'?window:globalThis);
