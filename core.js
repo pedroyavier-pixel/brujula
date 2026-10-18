@@ -37,7 +37,7 @@ function mergeFinance(remote,local){
   if(own.balance!==cloud.balance||own.date!==cloud.date){changes++;return {...cloud,balance:own.balance,date:own.date||cloud.date};}
   return cloud;
  });
- if(old.priority&&old.priority!==data.priority&&!/^Movimientos desde junio importados\./.test(old.priority)){data.priority=old.priority;changes++;}
+ if(old.priority&&old.priority!==data.priority&&!/^(Movimientos desde junio importados\.|Historial junio-octubre cargado y conciliado\.)/.test(old.priority)){data.priority=old.priority;changes++;}
  if(old.month&&old.month!==data.month){data.month=old.month;changes++;}
  if(old.preferences){data.preferences={...(data.preferences||{}),...old.preferences};}
  return {data,changed:changes>0,added,changes};
